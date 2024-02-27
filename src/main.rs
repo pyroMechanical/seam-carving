@@ -126,7 +126,7 @@ fn main() {
     let mut file_name = path.file_name().unwrap().to_str().unwrap().to_owned();
     file_name.truncate(file_name.as_str().rfind('.').unwrap());
     file_name.push_str("_seams.png");
-    match image.save(path.with_file_name(file_name.clone())){
+    match seam_visual.save(path.with_file_name(file_name.clone())){
         Ok(_) => println!("Image saved as {}", file_name),
         Err(e) => eprintln!("Failed to save image: {}", e),
     };
