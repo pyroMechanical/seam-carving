@@ -39,35 +39,61 @@ fn main() {
         seams.get_pixel_mut(i, seams.height() - 1).0[0] = gradient.get_pixel(i, gradient.height() - 1).0[0] as i32;
     }
 
+    let mut greatest_point = 0;
+
     //count vertical seams, from bottom to top
     for y in (0..(gradient.height()-2)).rev(){
         for x in 0..gradient.width() {
             let current = pixel_value(gradient.get_pixel_checked(x, y));
-            let left = pixel_value(gradient.get_pixel_checked(x.wrapping_sub(1), y.wrapping_add(1)));
-            let center = pixel_value(gradient.get_pixel_checked(x, y.wrapping_add(1)));
-            let right = pixel_value(gradient.get_pixel_checked(x.wrapping_add(1), y.wrapping_add(1)));
+            let left = pixel_value(seams.get_pixel_checked(x.wrapping_sub(1), y.wrapping_add(1)));
+            let center = pixel_value(seams.get_pixel_checked(x, y.wrapping_add(1)));
+            let right = pixel_value(seams.get_pixel_checked(x.wrapping_add(1), y.wrapping_add(1)));
             //println!("current: {}, left: {}, center: {}, right: {}", current, left, center, right);
             if left < right && left < center {
-                gradient.get_pixel_mut_checked(x.wrapping_sub(1), y.wrapping_add(1)).map(|x| *x = Luma([i32::MAX as i16]));
-                seams.put_pixel(x, y, Luma([current + left]))
+                seams.get_pixel_mut_checked(x.wrapping_sub(1), y.wrapping_add(1)).map(|x| x.0[0] += i32::MAX/2);
+                seams.put_pixel(x, y, Luma([current + left]));
+                if greatest_point < current + left {
+                    greatest_point = current + left;
+                }
             }
             else if right < left && right < center {
-                gradient.get_pixel_mut_checked(x.wrapping_add(1), y.wrapping_add(1)).map(|x| *x = Luma([i32::MAX as i16]));
-                seams.put_pixel(x, y, Luma([current + right]))
+                seams.get_pixel_mut_checked(x.wrapping_sub(1), y.wrapping_add(1)).map(|x| x.0[0] += i32::MAX/2);
+                seams.put_pixel(x, y, Luma([current + right]));
+                if greatest_point < current + right {
+                    greatest_point = current + right;
+                }
             }
             else {
-                gradient.get_pixel_mut_checked(x, y.wrapping_add(1)).map(|x: &mut Luma<i16>| *x = Luma([i32::MAX as i16]));
-                seams.put_pixel(x, y, Luma([current + center]))
+                seams.get_pixel_mut_checked(x.wrapping_sub(1), y.wrapping_add(1)).map(|x| x.0[0] += i32::MAX/2);
+                seams.put_pixel(x, y, Luma([current + center]));
+                if greatest_point < current + center {
+                    greatest_point = current + center;
+                }
             }
         }
     }
 
-    let seam_count = 200;
+    for x in 0..seams.width() {
+        for y in 0..seams.height() {
+            seams.get_pixel_mut(x, y).0[0] -= i32::MAX/2;
+        }
+    }
 
+    let mut seam_visual: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(seams.width(), seams.height());
+
+    for x in 0..seam_visual.width() {
+        for y in 0..seam_visual.height() {
+            let v = 255.0*(seams.get_pixel(x, y).0[0] as f32)/(greatest_point as f32);
+            seam_visual.put_pixel(x, y, Rgb([v as u8, v as u8, v as u8]));
+        }
+    }
+
+    let seam_count = 200;
+    
     
     let mut seam_values = vec![i32::MAX; seam_count];
     let mut seam_indices = vec![0u32; seam_count];
-
+    
     for x in 0..seams.width() {
         let pixel = seams.get_pixel(x, 0).0[0];
         'index: for i in 0..seam_count {
@@ -79,21 +105,21 @@ fn main() {
             }
         }
     }
-
+    
     for i in 0..seam_count {
         for y in 0..seams.height() {
             image.put_pixel(seam_indices[i], y, Rgb([0, 255, 0]));
-            let center = i32::abs(i32::abs(seams.get_pixel_checked(seam_indices[i], y + 1).unwrap_or(&Luma([i32::MAX])).0[0] - seams.get_pixel(seam_indices[i], y).0[0]) - i32::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i32));
-            let left = i32::abs(i32::abs(seams.get_pixel_checked(seam_indices[i].wrapping_sub(1), y + 1).unwrap_or(&Luma([i32::MAX])).0[0] - seams.get_pixel(seam_indices[i], y).0[0]) - i32::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i32));
-            let right = i32::abs(i32::abs(seams.get_pixel_checked(seam_indices[i].wrapping_add(1), y + 1).unwrap_or(&Luma([i32::MAX])).0[0] - seams.get_pixel(seam_indices[i], y).0[0]) - i32::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i32));
-
+            let center = i64::abs(i64::abs(seams.get_pixel_checked(seam_indices[i], y + 1).unwrap_or(&Luma([i32::MAX])).0[0] as i64 - seams.get_pixel(seam_indices[i], y).0[0] as i64) - i64::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i64));
+            let left = i64::abs(i64::abs(seams.get_pixel_checked(seam_indices[i].wrapping_sub(1), y + 1).unwrap_or(&Luma([i32::MAX])).0[0] as i64 - seams.get_pixel(seam_indices[i], y).0[0] as i64) - i64::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i64));
+            let right = i64::abs(i64::abs(seams.get_pixel_checked(seam_indices[i].wrapping_add(1), y + 1).unwrap_or(&Luma([i32::MAX])).0[0] as i64 - seams.get_pixel(seam_indices[i], y).0[0] as i64) - i64::abs(gradient.get_pixel(seam_indices[i], y).0[0] as i64));
+    
             if left < center && left < right {
                 seam_indices[i] -= 1;
             }
             else if right < center && right < left {
                 seam_indices[i] += 1;
             }
-            seams.put_pixel(seam_indices[i], y, Luma([i32::MAX/2]));
+            seams.put_pixel(seam_indices[i], y, Luma([i32::MAX]));
         }
     }
 
@@ -110,10 +136,10 @@ fn read_image_file(path: PathBuf) -> Result<DynamicImage, ImageError> {
     image::io::Reader::open(path)?.decode()
 }
 
-fn pixel_value(pixel: Option<&Luma<i16>>) -> i32 {
+fn pixel_value<T: Copy + Clone + Into<i32>>(pixel: Option<&Luma<T>>) -> i32 {
     match pixel {
         None => i32::MAX,
-        Some(pixel) => pixel.0[0] as i32
+        Some(pixel) => pixel.0[0].into()
     }
 }
 
